@@ -1,4 +1,4 @@
-# Spike.AsyncValueCache
+# AsyncValueCache
 
 LRU cache for async values
 
