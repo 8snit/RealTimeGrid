@@ -30,7 +30,7 @@ namespace Spike.AsyncValueCache.Tests
             var cache = new AsyncValueCache<string>();
             foreach (var city in cities)
             {
-                var temperature = await cache.GetOrAdd(city, temperatureProvisioning);
+                var temperature = await cache.GetOrAdd(city, temperatureProvisioning, expiration: TimeSpan.FromHours(1));
                 Assert.AreEqual(city.Length, temperature);
                 await Task.Delay(1);
             }

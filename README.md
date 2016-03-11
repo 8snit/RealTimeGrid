@@ -21,7 +21,7 @@ Provide information on how to compute the async value (e.g. some http call)...
     var cache = new AsyncValueCache<string>();
     foreach (var city in cities)
     {
-        var temperature = await cache.GetOrAdd(city, temperatureProvisioning);
+        var temperature = await cache.GetOrAdd(city, temperatureProvisioning, expiration: TimeSpan.FromHours(1));
         ...
     }
 ```
