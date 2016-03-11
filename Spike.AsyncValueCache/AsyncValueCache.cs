@@ -8,9 +8,9 @@ using System.Timers;
 
 namespace Spike.AsyncValueCache
 {
-    public class AsyncValueCache : IEnumerable<AsyncValueCache.Item>, IDisposable
+    public class AsyncValueCache<TKey> : IEnumerable<AsyncValueCache<TKey>.Entry>, IDisposable
     {
-        private readonly ConcurrentDictionary<string, Item> _data;
+        private readonly ConcurrentDictionary<TKey, Entry> _data;
         private readonly TimeSpan _defaultExpiration;
         private readonly int _maxItems;
         private readonly Timer _timer;
@@ -18,7 +18,7 @@ namespace Spike.AsyncValueCache
         public AsyncValueCache(int maxItems = 1000, TimeSpan? defaultExpiration = null,
             TimeSpan? automaticExpirationHandlerInterval = null)
         {
-            _data = new ConcurrentDictionary<string, Item>();
+            _data = new ConcurrentDictionary<TKey, Entry>();
             _maxItems = maxItems;
             _defaultExpiration = defaultExpiration ?? TimeSpan.FromDays(365);
             if (automaticExpirationHandlerInterval.HasValue)
@@ -29,9 +29,15 @@ namespace Spike.AsyncValueCache
             }
         }
 
-        public int Count
+        public int Count => _data.Count;
+
+        public Entry this[TKey key]
         {
-            get { return _data.Count; }
+            get
+            {
+                Entry entry;
+                return !_data.TryGetValue(key, out entry) ? null : entry;
+            }
         }
 
         public void Dispose()
@@ -43,7 +49,7 @@ namespace Spike.AsyncValueCache
             }
         }
 
-        public IEnumerator<Item> GetEnumerator()
+        public IEnumerator<Entry> GetEnumerator()
         {
             return _data.Values.GetEnumerator();
         }
@@ -57,10 +63,10 @@ namespace Spike.AsyncValueCache
         {
             var now = DateTime.UtcNow;
 
-            foreach (var item in this.Where(x => x.ExpirationDate <= now).ToList())
+            foreach (var entry in this.Where(x => x.ExpirationDate <= now).ToList())
             {
-                Item removedItem;
-                _data.TryRemove(item.Key, out removedItem);
+                Entry removedItem;
+                _data.TryRemove(entry.Key, out removedItem);
             }
 
             if (Count > _maxItems)
@@ -69,10 +75,10 @@ namespace Spike.AsyncValueCache
                     .Skip(_maxItems)
                     .ToList();
 
-                foreach (var item in itemsToRemove)
+                foreach (var entry in itemsToRemove)
                 {
-                    Item removedItem;
-                    _data.TryRemove(item.Key, out removedItem);
+                    Entry removedItem;
+                    _data.TryRemove(entry.Key, out removedItem);
                 }
             }
         }
@@ -82,22 +88,22 @@ namespace Spike.AsyncValueCache
             _data.Clear();
         }
 
-        public async Task<TValue> GetOrAdd<TValue>(string key, Func<string, Task<TValue>> asyncValueProvisioning,
+        public async Task<TValue> GetOrAdd<TValue>(TKey key, Func<TKey, Task<TValue>> asyncValueProvisioning,
             TimeSpan? expiration = null)
         {
-            Func<string, Task<object>> asyncValueFactory = async currentKey => await asyncValueProvisioning(currentKey);
-            var item = _data.GetOrAdd(key,
+            Func<TKey, Task<object>> asyncValueFactory = async currentKey => await asyncValueProvisioning(currentKey);
+            var entry = _data.GetOrAdd(key,
                 currentKey =>
-                    new Item(currentKey, async () => await asyncValueFactory(currentKey),
+                    new Entry(currentKey, async () => await asyncValueFactory(currentKey),
                         DateTime.UtcNow.Add(expiration ?? _defaultExpiration)));
-            var value = await item.LazyAsyncValue.Value;
-            item.LastAccessDate = DateTime.UtcNow;
+            var value = await entry.LazyAsyncValue.Value;
+            entry.LastAccessDate = DateTime.UtcNow;
             return (TValue) value;
         }
 
-        public class Item
+        public class Entry
         {
-            public Item(string key, Func<Task<object>> asyncValueFactory, DateTime expirationDate)
+            public Entry(TKey key, Func<Task<object>> asyncValueFactory, DateTime expirationDate)
             {
                 Key = key;
                 LazyAsyncValue = new Lazy<Task<object>>(asyncValueFactory);
@@ -105,7 +111,7 @@ namespace Spike.AsyncValueCache
                 LastAccessDate = DateTime.UtcNow;
             }
 
-            public string Key { get; }
+            public TKey Key { get; }
 
             public Lazy<Task<object>> LazyAsyncValue { get; }
 
