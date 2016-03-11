@@ -4,7 +4,7 @@ LRU cache for async values
 
 ### Introduction
 
-Spike of a simple LRU cache for async values (aka Promises or Futures) with item individual expiration.
+Spike of a simple LRU cache for async values (aka Promises or Futures) with individual item expiration.
 
 ### Usage
 
